@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>個人資產負債表</title>
+<style>
+  :root {
+    --ink: #1a2332;
+    --ink-soft: #5a6577;
+    --line: #e3e7ee;
+    --bg: #fbfcfd;
+    --card: #ffffff;
+    --asset: #1f7a5c;
+    --asset-bg: #edf7f2;
+    --debt: #b0413e;
+    --debt-bg: #fbeeed;
+    --net: #1a3a6b;
+    --net-bg: #ecf1f9;
+    --ratio: #8a6d1f;
+    --ratio-bg: #f8f3e6;
+    --accent: #1a3a6b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.5;
+    padding: 24px 16px 60px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { margin-bottom: 20px; }
+  h1 {
+    font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  h1 small { font-size: 0.8rem; font-weight: 400; color: var(--ink-soft); letter-spacing: 0; }
+  .updated { font-size: 0.75rem; color: var(--ink-soft); margin-top: 4px; }
+
+  /* Date picker */
+  .datebar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 24px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 16px; flex-wrap: wrap;
+  }
+  .datebar label { font-size: 0.85rem; font-weight: 600; color: var(--ink); }
+  .datebar .hint { font-size: 0.72rem; color: var(--ink-soft); }
+  .datebar input[type="date"] {
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 11px;
+    font-size: 0.9rem; color: var(--ink); font-family: inherit;
+    background: #fff; cursor: pointer;
+  }
+  .datebar input[type="date"]:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .datebar .today-btn {
+    border: 1px solid var(--line); background: #fff; border-radius: 8px;
+    padding: 7px 12px; font-size: 0.78rem; cursor: pointer; color: var(--accent); font-weight: 500;
+  }
+  .datebar .today-btn:hover { background: var(--net-bg); }
+
+  /* Summary cards */
+  .summary {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin-bottom: 28px;
+  }
+  .scard {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 16px; position: relative; overflow: hidden;
+  }
+  .scard::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  }
+  .scard.net::before { background: var(--net); }
+  .scard.ratio::before { background: var(--ratio); }
+  .scard.asset::before { background: var(--asset); }
+  .scard.debt::before { background: var(--debt); }
+  .scard .label { font-size: 0.78rem; color: var(--ink-soft); font-weight: 500; }
+  .scard .value { font-size: 1.45rem; font-weight: 700; margin-top: 6px; letter-spacing: -0.02em; word-break: break-all; }
+  .scard.net .value { color: var(--net); }
+  .scard.ratio .value { color: var(--ratio); }
+  .scard.asset .value { color: var(--asset); }
+  .scard.debt .value { color: var(--debt); }
+  .scard .sub { font-size: 0.7rem; color: var(--ink-soft); margin-top: 2px; }
+
+  /* Sections */
+  .section { margin-bottom: 22px; }
+  .section-head {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  }
+  .section-head h2 { font-size: 1.05rem; font-weight: 700; }
+  .pill {
+    font-size: 0.72rem; padding: 2px 9px; border-radius: 999px; font-weight: 600;
+  }
+  .pill.a { background: var(--asset-bg); color: var(--asset); }
+  .pill.d { background: var(--debt-bg); color: var(--debt); }
+  .section-head .total { margin-left: auto; font-weight: 700; font-size: 0.95rem; }
+  .total.a { color: var(--asset); }
+  .total.d { color: var(--debt); }
+
+  .group {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+  }
+  .group-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 14px; background: #f6f8fb; border-bottom: 1px solid var(--line);
+  }
+  .group-head .gname {
+    font-weight: 600; font-size: 0.9rem; border: none; background: transparent;
+    color: var(--ink); width: auto; min-width: 60px; flex: 0 1 auto; padding: 2px 4px;
+    border-radius: 6px;
+  }
+  .group-head .gname:focus { background: #fff; outline: 1px solid var(--accent); }
+  .group-head .gtotal { margin-left: auto; font-weight: 600; font-size: 0.88rem; color: var(--ink-soft); }
+  .icon-btn {
+    border: none; background: transparent; cursor: pointer; color: var(--ink-soft);
+    width: 26px; height: 26px; border-radius: 6px; font-size: 1rem; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+  }
+  .icon-btn:hover { background: #e7ebf1; color: var(--ink); }
+  .icon-btn.del:hover { background: var(--debt-bg); color: var(--debt); }
+
+  .item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-bottom: 1px solid #f1f3f7;
+  }
+  .item:last-child { border-bottom: none; }
+  .item input.name {
+    border: none; background: transparent; font-size: 0.88rem; color: var(--ink);
+    flex: 1 1 auto; min-width: 0; padding: 4px 6px; border-radius: 6px;
+  }
+  .item input.name:focus { background: #f6f8fb; outline: 1px solid var(--line); }
+  .item input.amt {
+    border: 1px solid var(--line); background: #fff; border-radius: 7px;
+    font-size: 0.9rem; text-align: right; padding: 5px 9px; width: 130px;
+    font-variant-numeric: tabular-nums; color: var(--ink); flex: none;
+  }
+  .item input.amt:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .item .cur { font-size: 0.75rem; color: var(--ink-soft); width: 34px; flex: none; text-align: right; }
+
+  /* Property (real-estate) item */
+  .item.prop { display: block; padding: 10px 14px; }
+  .prop-top { display: flex; align-items: center; gap: 8px; }
+  .prop-top input.name {
+    border: none; background: transparent; font-size: 0.88rem; font-weight: 600;
+    color: var(--ink); flex: 1 1 auto; min-width: 0; padding: 4px 6px; border-radius: 6px;
+  }
+  .prop-top input.name:focus { background: #f6f8fb; outline: 1px solid var(--line); }
+  .prop-top .ptotal { margin-left: auto; font-weight: 600; font-size: 0.9rem; color: var(--asset); font-variant-numeric: tabular-nums; }
+  .prop-calc {
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 8px;
+  }
+  .pfield { display: flex; flex-direction: column; gap: 3px; }
+  .pfield label { font-size: 0.68rem; color: var(--ink-soft); padding-left: 2px; }
+  .pfield input {
+    border: 1px solid var(--line); background: #fff; border-radius: 7px;
+    font-size: 0.85rem; text-align: right; padding: 5px 8px; width: 100%;
+    font-variant-numeric: tabular-nums; color: var(--ink);
+  }
+  .pfield input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .prop-formula { font-size: 0.68rem; color: var(--ink-soft); margin-top: 6px; padding-left: 2px; }
+
+  .add-item {
+    width: 100%; text-align: left; padding: 9px 14px; border: none;
+    background: transparent; color: var(--accent); font-size: 0.82rem; cursor: pointer;
+    font-weight: 500;
+  }
+  .add-item:hover { background: #f6f8fb; }
+
+  .add-group {
+    width: 100%; padding: 11px; border: 1.5px dashed var(--line); background: transparent;
+    border-radius: 12px; color: var(--ink-soft); font-size: 0.85rem; cursor: pointer; font-weight: 500;
+  }
+  .add-group:hover { border-color: var(--accent); color: var(--accent); background: #f9fbfd; }
+
+  .foot { margin-top: 30px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    border: 1px solid var(--line); background: #fff; border-radius: 9px;
+    padding: 9px 16px; font-size: 0.82rem; cursor: pointer; color: var(--ink); font-weight: 500;
+  }
+  .btn:hover { background: #f6f8fb; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:hover { background: #16315a; }
+  .btn.warn:hover { background: var(--debt-bg); color: var(--debt); border-color: var(--debt); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .status { font-size: 0.72rem; color: var(--asset); align-self: center; }
+
+  /* Cloud panel */
+  .cloud {
+    margin-top: 28px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 14px; padding: 18px;
+  }
+  .cloud h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; display:flex; align-items:center; gap:8px; }
+  .cloud .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-soft); flex:none; }
+  .cloud .dot.on { background: var(--asset); }
+  .cloud .dot.err { background: var(--debt); }
+  .cloud .desc { font-size: 0.74rem; color: var(--ink-soft); margin-bottom: 14px; }
+  .cloud-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .history { margin-top: 16px; }
+  .history-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border: 1px solid var(--line); border-radius: 9px; margin-bottom: 8px; background: #fbfcfd;
+  }
+  .history-item .hmeta { flex: 1 1 auto; min-width: 0; }
+  .history-item .hdate { font-size: 0.9rem; font-weight: 700; color: var(--accent); }
+  .history-item .hsum { font-size: 0.76rem; color: var(--ink); margin-top: 2px; }
+  .history-item .hsaved { font-size: 0.68rem; color: var(--ink-soft); margin-top: 1px; }
+  .history-item .hbtn {
+    border: 1px solid var(--line); background: #fff; border-radius: 7px;
+    padding: 5px 11px; font-size: 0.76rem; cursor: pointer; color: var(--accent); font-weight: 600; flex: none;
+  }
+  .history-item .hbtn:hover { background: var(--net-bg); }
+  .history-item .hbtn.del { color: var(--debt); }
+  .history-item .hbtn.del:hover { background: var(--debt-bg); }
+  .history-empty { font-size: 0.76rem; color: var(--ink-soft); padding: 8px 2px; }
+
+  @media (max-width: 620px) {
+    .summary { grid-template-columns: repeat(2, 1fr); }
+    .scard .value { font-size: 1.2rem; }
+    .item input.amt { width: 110px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>個人資產負債表 <small>Personal Balance Sheet</small></h1>
+    <div class="updated" id="updated"></div>
+  </header>
+
+  <div class="datebar">
+    <label for="recordDate">紀錄日期</label>
+    <input type="date" id="recordDate">
+    <button class="today-btn" id="todayBtn">今天</button>
+    <span class="hint">此日期會在「儲存到雲端」時一併記錄並顯示於歷史清單</span>
+  </div>
+
+  <div class="summary">
+    <div class="scard net">
+      <div class="label">淨資產</div>
+      <div class="value" id="sNet">—</div>
+      <div class="sub">總資產 − 總負債</div>
+    </div>
+    <div class="scard ratio">
+      <div class="label">負債比率</div>
+      <div class="value" id="sRatio">—</div>
+      <div class="sub">總負債 ÷ 總資產</div>
+    </div>
+    <div class="scard asset">
+      <div class="label">總資產</div>
+      <div class="value" id="sAsset">—</div>
+      <div class="sub" id="sAssetCount"></div>
+    </div>
+    <div class="scard debt">
+      <div class="label">總負債</div>
+      <div class="value" id="sDebt">—</div>
+      <div class="sub" id="sDebtCount"></div>
+    </div>
+  </div>
+
+  <!-- ASSETS -->
+  <div class="section">
+    <div class="section-head">
+      <h2>資產</h2><span class="pill a">Assets</span>
+      <span class="total a" id="totAsset">—</span>
+    </div>
+    <div id="assetGroups"></div>
+    <button class="add-group" data-side="asset">＋ 新增資產類別</button>
+  </div>
+
+  <!-- LIABILITIES -->
+  <div class="section">
+    <div class="section-head">
+      <h2>負債</h2><span class="pill d">Liabilities</span>
+      <span class="total d" id="totDebt">—</span>
+    </div>
+    <div id="debtGroups"></div>
+    <button class="add-group" data-side="debt">＋ 新增負債類別</button>
+  </div>
+
+  <div class="foot">
+    <button class="btn" id="copyBtn">複製文字摘要</button>
+    <button class="btn" id="exportBtn">匯出 JSON 備份</button>
+    <button class="btn" id="importBtn">匯入備份</button>
+    <button class="btn warn" id="resetBtn">回復預設範本</button>
+    <span class="status" id="status"></span>
+    <input type="file" id="fileInput" accept="application/json" hidden>
+  </div>
+
+  <!-- CLOUD / FIRESTORE -->
+  <div class="cloud">
+    <h3><span class="dot" id="cloudDot"></span>雲端紀錄（Firebase Firestore）</h3>
+    <div class="desc" id="cloudDesc">尚未連線。請於程式碼上方填入你的 firebaseConfig 即可啟用。</div>
+    <div class="cloud-actions">
+      <button class="btn primary" id="cloudSave" disabled>儲存到雲端</button>
+      <button class="btn" id="cloudLoad" disabled>載入歷史紀錄</button>
+      <button class="btn" id="reportBtn" disabled>統計報表</button>
+      <span class="status" id="cloudStatus"></span>
+    </div>
+    <div class="history" id="historyList"></div>
+  </div>
+</div>
+
+<script>
+/* ======================================================================
+   ① 在此填入你自己的 Firebase 專案設定
+   （Firebase 主控台 → 專案設定 → 你的應用程式 → SDK 設定與配置）
+   填好後雲端按鈕會自動啟用。
+   ====================================================================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCAOxO3oHSZFckRJRtMf-WqdhlOSAlTIRo",
+  authDomain: "financial-position-a2f27.firebaseapp.com",
+  projectId: "financial-position-a2f27",
+  storageBucket: "financial-position-a2f27.firebasestorage.app",
+  messagingSenderId: "600994047066",
+  appId: "1:600994047066:web:e7c041ea86d825d26fa463"
+};
+
+// 同一份資料的擁有者識別（可自訂，用來區隔不同人的紀錄）
+const OWNER_ID = "jim";
+/* ====================================================================== */
+
+const fmt = n => "NT$ " + Math.round(n).toLocaleString("en-US");
+const $ = s => document.querySelector(s);
+const todayStr = () => {
+  const d = new Date(); const tz = d.getTimezoneOffset() * 60000;
+  return new Date(d - tz).toISOString().slice(0, 10);
+};
+
+const DEFAULT = {
+  asset: [
+    { name: "活期存款", items: [
+      { name: "玉山", amt: 0 },
+      { name: "中信", amt: 0 },
+      { name: "彰銀", amt: 0 },
+      { name: "兆豐", amt: 0 },
+      { name: "郵局", amt: 0 },
+      { name: "日幣", amt: 0 },
+    ]},
+    { name: "投資資產", items: [
+      { name: "美股", amt: 0 },
+      { name: "台股", amt: 0 },
+    ]},
+    { name: "不動產資產", type: "property", items: [
+      { name: "不動產", ping: 0, unit: 0, parking: 0 },
+    ]},
+  ],
+  debt: [
+    { name: "信貸", items: [ { name: "信貸餘額", amt: 0 } ]},
+    { name: "房貸", items: [ { name: "房貸餘額", amt: 0 } ]},
+  ]
+};
+
+let state = null;
+
+async function load() {
+  try {
+    const r = await window.storage.get("balanceSheet");
+    state = r ? JSON.parse(r.value) : structuredClone(DEFAULT);
+  } catch { state = structuredClone(DEFAULT); }
+  $("#recordDate").value = todayStr();
+  render();
+}
+
+let saveTimer;
+function save(showMsg) {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      await window.storage.set("balanceSheet", JSON.stringify(state));
+      if (showMsg) flash("已儲存");
+      $("#updated").textContent = "最後更新：" + new Date().toLocaleString("zh-TW");
+    } catch { flash("儲存失敗", true); }
+  }, 250);
+}
+function flash(msg, err, el) {
+  const s = el || $("#status"); s.textContent = msg;
+  s.style.color = err ? "var(--debt)" : "var(--asset)";
+  setTimeout(() => s.textContent = "", 2200);
+}
+
+function isProp(g) { return g.type === "property"; }
+function propValue(it) {
+  // 單價、車位價格輸入單位皆為「萬」，故乘以 10000
+  return (parseFloat(it.ping)||0) * (parseFloat(it.unit)||0) * 10000 + (parseFloat(it.parking)||0) * 10000;
+}
+function itemValue(it, g) {
+  return isProp(g) ? propValue(it) : (parseFloat(it.amt) || 0);
+}
+function groupTotal(g) { return g.items.reduce((s, it) => s + itemValue(it, g), 0); }
+function sideTotal(side) { return state[side].reduce((s, g) => s + groupTotal(g), 0); }
+
+function render() {
+  renderSide("asset", "#assetGroups");
+  renderSide("debt", "#debtGroups");
+  updateSummary();
+}
+
+function renderSide(side, sel) {
+  const wrap = $(sel); wrap.innerHTML = "";
+  state[side].forEach((g, gi) => {
+    const grp = document.createElement("div");
+    grp.className = "group";
+    const head = document.createElement("div");
+    head.className = "group-head";
+    head.innerHTML = `
+      <input class="gname" value="${esc(g.name)}">
+      <span class="gtotal">${fmt(groupTotal(g))}</span>
+      <button class="icon-btn del" title="刪除此類別">✕</button>`;
+    head.querySelector(".gname").oninput = e => { g.name = e.target.value; save(); };
+    head.querySelector(".del").onclick = () => {
+      if (confirm(`刪除「${g.name}」整個類別？`)) { state[side].splice(gi,1); render(); save(true); }
+    };
+    grp.appendChild(head);
+
+    g.items.forEach((it, ii) => {
+      const row = isProp(g) ? propRow(grp, g, it, ii) : normalRow(grp, g, it, ii);
+      grp.appendChild(row);
+    });
+
+    const add = document.createElement("button");
+    add.className = "add-item"; add.textContent = "＋ 新增項目";
+    add.onclick = () => {
+      g.items.push(isProp(g) ? { name:"新不動產", ping:0, unit:0, parking:0 } : { name:"新項目", amt:0 });
+      render(); save();
+    };
+    grp.appendChild(add);
+    wrap.appendChild(grp);
+  });
+}
+
+function normalRow(grp, g, it, ii) {
+  const row = document.createElement("div");
+  row.className = "item";
+  row.innerHTML = `
+    <input class="name" value="${esc(it.name)}">
+    <input class="amt" type="number" inputmode="decimal" step="any" value="${it.amt || ""}" placeholder="0">
+    <span class="cur">TWD</span>
+    <button class="icon-btn del" title="刪除">✕</button>`;
+  row.querySelector(".name").oninput = e => { it.name = e.target.value; save(); };
+  row.querySelector(".amt").oninput = e => { it.amt = e.target.value; refresh(grp, g); save(); };
+  row.querySelector(".del").onclick = () => { g.items.splice(ii,1); render(); save(true); };
+  return row;
+}
+
+function propRow(grp, g, it, ii) {
+  const row = document.createElement("div");
+  row.className = "item prop";
+  row.innerHTML = `
+    <div class="prop-top">
+      <input class="name" value="${esc(it.name)}">
+      <span class="ptotal">${fmt(propValue(it))}</span>
+      <button class="icon-btn del" title="刪除">✕</button>
+    </div>
+    <div class="prop-calc">
+      <div class="pfield"><label>坪數</label>
+        <input class="ping" type="number" inputmode="decimal" step="any" value="${it.ping || ""}" placeholder="0"></div>
+      <div class="pfield"><label>單價（每坪 N 萬）</label>
+        <input class="unit" type="number" inputmode="decimal" step="any" value="${it.unit || ""}" placeholder="0"></div>
+      <div class="pfield"><label>車位價格（X 萬）</label>
+        <input class="parking" type="number" inputmode="decimal" step="any" value="${it.parking || ""}" placeholder="0"></div>
+    </div>
+    <div class="prop-formula">總價 = 坪數 × 單價(萬) × 10000 ＋ 車位(萬) × 10000</div>`;
+  row.querySelector(".name").oninput = e => { it.name = e.target.value; save(); };
+  const recalc = () => { row.querySelector(".ptotal").textContent = fmt(propValue(it)); refresh(grp, g); save(); };
+  row.querySelector(".ping").oninput = e => { it.ping = e.target.value; recalc(); };
+  row.querySelector(".unit").oninput = e => { it.unit = e.target.value; recalc(); };
+  row.querySelector(".parking").oninput = e => { it.parking = e.target.value; recalc(); };
+  row.querySelector(".del").onclick = () => { g.items.splice(ii,1); render(); save(true); };
+  return row;
+}
+
+function refresh(grp, g) {
+  grp.querySelector(".gtotal").textContent = fmt(groupTotal(g));
+  updateSummary();
+}
+
+function updateSummary() {
+  const a = sideTotal("asset"), d = sideTotal("debt"), net = a - d;
+  $("#sAsset").textContent = fmt(a);
+  $("#sDebt").textContent = fmt(d);
+  $("#sNet").textContent = fmt(net);
+  $("#sRatio").textContent = a > 0 ? (d / a * 100).toFixed(1) + "%" : "—";
+  $("#totAsset").textContent = fmt(a);
+  $("#totDebt").textContent = fmt(d);
+  const ac = state.asset.reduce((s,g)=>s+g.items.length,0);
+  const dc = state.debt.reduce((s,g)=>s+g.items.length,0);
+  $("#sAssetCount").textContent = state.asset.length + " 類別 · " + ac + " 項";
+  $("#sDebtCount").textContent = state.debt.length + " 類別 · " + dc + " 項";
+  $("#sNet").style.color = net >= 0 ? "var(--net)" : "var(--debt)";
+}
+
+function esc(s){ return String(s).replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+
+function fmtDate(s) {
+  if (!s) return "（無日期）";
+  const [y,m,d] = s.split("-");
+  return `${y}/${parseInt(m)}/${parseInt(d)}`;
+}
+
+function buildSummaryText() {
+  const a = sideTotal("asset"), d = sideTotal("debt"), net = a - d;
+  const ratio = a > 0 ? (d/a*100).toFixed(1)+"%" : "—";
+  let t = `個人資產負債表（紀錄日期：${fmtDate($("#recordDate").value)}）\n`;
+  t += `淨資產：${fmt(net)}　負債比率：${ratio}\n總資產：${fmt(a)}　總負債：${fmt(d)}\n\n【資產】\n`;
+  state.asset.forEach(g => {
+    t += `■ ${g.name}（${fmt(groupTotal(g))}）\n`;
+    g.items.forEach(it => {
+      if (isProp(g)) t += `   - ${it.name}：${it.ping||0}坪 × ${it.unit||0}萬 + 車位${it.parking||0}萬 = ${fmt(propValue(it))}\n`;
+      else t += `   - ${it.name}：${fmt(parseFloat(it.amt)||0)}\n`;
+    });
+  });
+  t += `\n【負債】\n`;
+  state.debt.forEach(g => {
+    t += `■ ${g.name}（${fmt(groupTotal(g))}）\n`;
+    g.items.forEach(it => t += `   - ${it.name}：${fmt(parseFloat(it.amt)||0)}\n`);
+  });
+  return t;
+}
+
+$("#todayBtn").onclick = () => { $("#recordDate").value = todayStr(); };
+
+document.querySelectorAll(".add-group").forEach(b => {
+  b.onclick = () => {
+    const side = b.dataset.side;
+    state[side].push({ name: side==="asset"?"新資產類別":"新負債類別", items: [{ name:"新項目", amt:0 }] });
+    render(); save();
+  };
+});
+
+$("#copyBtn").onclick = async () => {
+  try { await navigator.clipboard.writeText(buildSummaryText()); flash("已複製摘要"); }
+  catch { flash("複製失敗", true); }
+};
+$("#exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "資產負債表備份_" + new Date().toISOString().slice(0,10) + ".json"; a.click();
+  flash("已匯出");
+};
+$("#importBtn").onclick = () => $("#fileInput").click();
+$("#fileInput").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { state = JSON.parse(r.result); render(); save(true); } catch { flash("檔案格式錯誤", true); } };
+  r.readAsText(f); e.target.value = "";
+};
+$("#resetBtn").onclick = () => {
+  if(confirm("回復為預設範本？目前所有資料將被清除。")) {
+    state = structuredClone(DEFAULT); render(); save(true);
+  }
+};
+
+/* ===================== Firebase Firestore ===================== */
+let db = null, ready = false, FB = null;
+const dot = $("#cloudDot"), cdesc = $("#cloudDesc"), cstat = $("#cloudStatus");
+
+function setCloud(state_, msg) {
+  dot.className = "dot" + (state_==="on"?" on":state_==="err"?" err":"");
+  if (msg) cdesc.textContent = msg;
+}
+
+async function initFirebase() {
+  if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
+    setCloud("", "尚未連線。請於程式碼上方填入你的 firebaseConfig 即可啟用雲端功能。");
+    return;
+  }
+  try {
+    const [appMod, fsMod, authMod] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js"),
+      import("https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js"),
+    ]);
+    FB = fsMod;
+    const app = appMod.initializeApp(firebaseConfig);
+    db = fsMod.getFirestore(app);
+    const auth = authMod.getAuth(app);
+    await authMod.signInAnonymously(auth);
+    authMod.onAuthStateChanged(auth, u => {
+      if (u) {
+        ready = true;
+        $("#cloudSave").disabled = false;
+        $("#cloudLoad").disabled = false;
+        $("#reportBtn").disabled = false;
+        setCloud("on", "已連線到 Firestore。可儲存快照或載入歷史紀錄。");
+      }
+    });
+  } catch (e) {
+    setCloud("err", "雲端連線失敗（不影響表格使用）：" + e.message);
+  }
+}
+
+const colRef = () => FB.collection(db, "balanceSheets");
+
+$("#cloudSave").onclick = async () => {
+  if (!ready) return;
+  cstat.textContent = "儲存中…"; cstat.style.color = "var(--ink-soft)";
+  try {
+    const a = sideTotal("asset"), d = sideTotal("debt");
+    await FB.addDoc(colRef(), {
+      owner: OWNER_ID,
+      recordDate: $("#recordDate").value || todayStr(),
+      data: state,
+      totalAsset: a, totalDebt: d, netWorth: a - d,
+      ratio: a > 0 ? d/a : 0,
+      savedAt: new Date().toISOString(),
+      createdAt: FB.serverTimestamp()
+    });
+    flash("已儲存到雲端", false, cstat);
+    loadHistory();
+  } catch (e) { flash("儲存失敗：" + e.code, true, cstat); }
+};
+
+$("#cloudLoad").onclick = () => loadHistory();
+
+$("#reportBtn").onclick = () => {
+  // 報表頁需與本檔放在同一資料夾，檔名為 balance-report.html
+  window.open("balance-report.html", "_blank");
+};
+
+async function loadHistory() {
+  if (!ready) return;
+  const list = $("#historyList");
+  list.innerHTML = `<div class="history-empty">載入中…</div>`;
+  try {
+    const q = FB.query(colRef(), FB.orderBy("recordDate", "desc"), FB.limit(60));
+    const snap = await FB.getDocs(q);
+    const rows = [];
+    snap.forEach(d => { if ((d.data().owner||"") === OWNER_ID) rows.push({ id: d.id, ...d.data() }); });
+    if (!rows.length) { list.innerHTML = `<div class="history-empty">尚無雲端紀錄。</div>`; return; }
+    list.innerHTML = "";
+    rows.forEach(r => {
+      const div = document.createElement("div");
+      div.className = "history-item";
+      const dateLabel = fmtDate(r.recordDate);
+      const saved = r.savedAt ? new Date(r.savedAt).toLocaleString("zh-TW") : "";
+      div.innerHTML = `
+        <div class="hmeta">
+          <div class="hdate">${dateLabel}</div>
+          <div class="hsum">淨資產 ${fmt(r.netWorth||0)}　|　負債比 ${((r.ratio||0)*100).toFixed(1)}%　|　總資產 ${fmt(r.totalAsset||0)}</div>
+          <div class="hsaved">儲存於 ${saved}</div>
+        </div>
+        <button class="hbtn" data-act="load">載入修改</button>
+        <button class="hbtn del" data-act="del">刪除</button>`;
+      div.querySelector('[data-act="load"]').onclick = () => {
+        if (confirm(`載入「${dateLabel}」這筆紀錄？目前畫面上的資料將被覆蓋（仍可再次儲存）。`)) {
+          state = structuredClone(r.data);
+          if (r.recordDate) $("#recordDate").value = r.recordDate;
+          render(); save(true);
+          flash("已載入，可直接修改後再儲存", false, cstat);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      };
+      div.querySelector('[data-act="del"]').onclick = async () => {
+        if (confirm(`確定刪除「${dateLabel}」這筆雲端紀錄？`)) {
+          try { await FB.deleteDoc(FB.doc(db, "balanceSheets", r.id)); flash("已刪除", false, cstat); loadHistory(); }
+          catch (e) { flash("刪除失敗：" + e.code, true, cstat); }
+        }
+      };
+      list.appendChild(div);
+    });
+  } catch (e) {
+    list.innerHTML = `<div class="history-empty" style="color:var(--debt)">載入失敗：${e.code || e.message}</div>`;
+  }
+}
+
+load();
+initFirebase();
+</script>
+</body>
+</html>
