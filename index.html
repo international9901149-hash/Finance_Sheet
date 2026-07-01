@@ -19,6 +19,10 @@
     --net-bg: #ecf1f9;
     --ratio: #8a6d1f;
     --ratio-bg: #f8f3e6;
+    --cash: #6a4fb3;
+    --cash-bg: #f1eefa;
+    --income: #1f7a5c;
+    --balance: #1a3a6b;
     --accent: #1a3a6b;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -94,9 +98,11 @@
   }
   .pill.a { background: var(--asset-bg); color: var(--asset); }
   .pill.d { background: var(--debt-bg); color: var(--debt); }
+  .pill.c { background: var(--cash-bg); color: var(--cash); }
   .section-head .total { margin-left: auto; font-weight: 700; font-size: 0.95rem; }
   .total.a { color: var(--asset); }
   .total.d { color: var(--debt); }
+  .total.c { color: var(--cash); }
 
   .group {
     background: var(--card); border: 1px solid var(--line);
@@ -167,6 +173,48 @@
     font-weight: 500;
   }
   .add-item:hover { background: #f6f8fb; }
+
+  /* Cash-flow (expense) item with note box */
+  .item.cash { display: block; padding: 9px 14px; }
+  .cash-top { display: flex; align-items: center; gap: 8px; }
+  .cash-top input.name {
+    border: none; background: transparent; font-size: 0.88rem; color: var(--ink);
+    flex: 1 1 auto; min-width: 0; padding: 4px 6px; border-radius: 6px;
+  }
+  .cash-top input.name:focus { background: #f6f8fb; outline: 1px solid var(--line); }
+  .cash-top input.amt {
+    border: 1px solid var(--line); background: #fff; border-radius: 7px;
+    font-size: 0.9rem; text-align: right; padding: 5px 9px; width: 130px;
+    font-variant-numeric: tabular-nums; color: var(--ink); flex: none;
+  }
+  .cash-top input.amt:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .cash-note {
+    margin-top: 6px; width: 100%; border: 1px solid var(--line); background: #fff;
+    border-radius: 7px; font-size: 0.78rem; padding: 6px 9px; color: var(--ink-soft);
+    font-family: inherit;
+  }
+  .cash-note:focus { outline: 2px solid var(--accent); border-color: var(--accent); color: var(--ink); }
+  .cash-note::placeholder { color: #c3c9d4; }
+
+  /* Cash-flow summary cards */
+  .cash-summary {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 12px; margin: 4px 0 22px;
+  }
+  .cash-summary .scard.cash::before { background: var(--cash); }
+  .cash-summary .scard.cash .value { color: var(--cash); }
+  .cash-summary .scard.income::before { background: var(--income); }
+  .cash-summary .scard.income .value,
+  .cash-summary .scard.income input.income-input { color: var(--income); }
+  .cash-summary .scard.balance::before { background: var(--balance); }
+  .cash-summary .scard.balance .value { color: var(--balance); }
+  .income-input {
+    border: none; background: transparent; font-size: 1.45rem; font-weight: 700;
+    letter-spacing: -0.02em; padding: 6px 0 0; margin-top: 6px; width: 100%;
+    font-variant-numeric: tabular-nums; font-family: inherit;
+  }
+  .income-input:focus { outline: none; }
+  .income-input::placeholder { color: #c3c9d4; }
 
   .add-group {
     width: 100%; padding: 11px; border: 1.5px dashed var(--line); background: transparent;
@@ -279,11 +327,36 @@
     <button class="add-group" data-side="debt">＋ 新增負債類別</button>
   </div>
 
+  <!-- CASH FLOW -->
+  <div class="section">
+    <div class="section-head">
+      <h2>現金流</h2><span class="pill c">Cash Flow</span>
+      <span class="total c" id="totCash">—</span>
+    </div>
+    <div id="cashflowGroups"></div>
+    <button class="add-group" data-side="cashflow">＋ 新增現金流類別</button>
+
+    <div class="cash-summary">
+      <div class="scard cash">
+        <div class="label">本月支出總計</div>
+        <div class="value" id="sExpense">—</div>
+      </div>
+      <div class="scard income">
+        <div class="label">本月收入總計</div>
+        <input type="number" inputmode="decimal" step="any" id="incomeInput" class="income-input" placeholder="0">
+      </div>
+      <div class="scard balance">
+        <div class="label">結餘</div>
+        <div class="value" id="sBalance">—</div>
+        <div class="sub">收入 − 支出</div>
+      </div>
+    </div>
+  </div>
+
   <div class="foot">
     <button class="btn" id="copyBtn">複製文字摘要</button>
     <button class="btn" id="exportBtn">匯出 JSON 備份</button>
     <button class="btn" id="importBtn">匯入備份</button>
-    <button class="btn primary" id="reportLinkBtn">檢視報表</button>
     <button class="btn warn" id="resetBtn">回復預設範本</button>
     <span class="status" id="status"></span>
     <input type="file" id="fileInput" accept="application/json" hidden>
@@ -296,6 +369,7 @@
     <div class="cloud-actions">
       <button class="btn primary" id="cloudSave" disabled>儲存到雲端</button>
       <button class="btn" id="cloudLoad" disabled>載入歷史紀錄</button>
+      <button class="btn" id="reportBtn" disabled>統計報表</button>
       <span class="status" id="cloudStatus"></span>
     </div>
     <div class="history" id="historyList"></div>
@@ -349,7 +423,27 @@ const DEFAULT = {
   debt: [
     { name: "信貸", items: [ { name: "信貸餘額", amt: 0 } ]},
     { name: "房貸", items: [ { name: "房貸餘額", amt: 0 } ]},
-  ]
+  ],
+  cashflow: [
+    { name: "本月支出", items: [
+      { name: "房貸", amt: 0, note: "" },
+      { name: "孝親費", amt: 0, note: "" },
+      { name: "信貸", amt: 0, note: "" },
+      { name: "富邦信用卡", amt: 0, note: "" },
+      { name: "華南信用卡", amt: 0, note: "" },
+      { name: "中信信用卡", amt: 0, note: "" },
+      { name: "彰銀信用卡", amt: 0, note: "" },
+      { name: "台新信用卡", amt: 0, note: "" },
+      { name: "玉山信用卡", amt: 0, note: "" },
+      { name: "兆豐信用卡", amt: 0, note: "" },
+      { name: "大筆開銷1", amt: 0, note: "" },
+      { name: "大筆開銷2", amt: 0, note: "" },
+      { name: "大筆開銷3", amt: 0, note: "" },
+      { name: "大筆開銷4", amt: 0, note: "" },
+      { name: "大筆開銷5", amt: 0, note: "" },
+    ]},
+  ],
+  income: 0
 };
 
 let state = null;
@@ -359,7 +453,10 @@ async function load() {
     const r = await window.storage.get("balanceSheet");
     state = r ? JSON.parse(r.value) : structuredClone(DEFAULT);
   } catch { state = structuredClone(DEFAULT); }
+  if (!state.cashflow) state.cashflow = structuredClone(DEFAULT.cashflow);
+  if (typeof state.income !== "number") state.income = 0;
   $("#recordDate").value = todayStr();
+  $("#incomeInput").value = state.income || "";
   render();
 }
 
@@ -394,6 +491,7 @@ function sideTotal(side) { return state[side].reduce((s, g) => s + groupTotal(g)
 function render() {
   renderSide("asset", "#assetGroups");
   renderSide("debt", "#debtGroups");
+  renderSide("cashflow", "#cashflowGroups");
   updateSummary();
 }
 
@@ -415,14 +513,16 @@ function renderSide(side, sel) {
     grp.appendChild(head);
 
     g.items.forEach((it, ii) => {
-      const row = isProp(g) ? propRow(grp, g, it, ii) : normalRow(grp, g, it, ii);
+      const row = isProp(g) ? propRow(grp, g, it, ii) : (side === "cashflow" ? cashRow(grp, g, it, ii) : normalRow(grp, g, it, ii));
       grp.appendChild(row);
     });
 
     const add = document.createElement("button");
     add.className = "add-item"; add.textContent = "＋ 新增項目";
     add.onclick = () => {
-      g.items.push(isProp(g) ? { name:"新不動產", ping:0, unit:0, parking:0 } : { name:"新項目", amt:0 });
+      if (isProp(g)) g.items.push({ name:"新不動產", ping:0, unit:0, parking:0 });
+      else if (side === "cashflow") g.items.push({ name:"新項目", amt:0, note:"" });
+      else g.items.push({ name:"新項目", amt:0 });
       render(); save();
     };
     grp.appendChild(add);
@@ -440,6 +540,24 @@ function normalRow(grp, g, it, ii) {
     <button class="icon-btn del" title="刪除">✕</button>`;
   row.querySelector(".name").oninput = e => { it.name = e.target.value; save(); };
   row.querySelector(".amt").oninput = e => { it.amt = e.target.value; refresh(grp, g); save(); };
+  row.querySelector(".del").onclick = () => { g.items.splice(ii,1); render(); save(true); };
+  return row;
+}
+
+function cashRow(grp, g, it, ii) {
+  const row = document.createElement("div");
+  row.className = "item cash";
+  row.innerHTML = `
+    <div class="cash-top">
+      <input class="name" value="${esc(it.name)}">
+      <input class="amt" type="number" inputmode="decimal" step="any" value="${it.amt || ""}" placeholder="0">
+      <span class="cur">TWD</span>
+      <button class="icon-btn del" title="刪除">✕</button>
+    </div>
+    <input class="cash-note" type="text" placeholder="備註…" value="${esc(it.note || "")}">`;
+  row.querySelector(".name").oninput = e => { it.name = e.target.value; save(); };
+  row.querySelector(".amt").oninput = e => { it.amt = e.target.value; refresh(grp, g); save(); };
+  row.querySelector(".cash-note").oninput = e => { it.note = e.target.value; save(); };
   row.querySelector(".del").onclick = () => { g.items.splice(ii,1); render(); save(true); };
   return row;
 }
@@ -489,6 +607,14 @@ function updateSummary() {
   $("#sAssetCount").textContent = state.asset.length + " 類別 · " + ac + " 項";
   $("#sDebtCount").textContent = state.debt.length + " 類別 · " + dc + " 項";
   $("#sNet").style.color = net >= 0 ? "var(--net)" : "var(--debt)";
+
+  const expense = sideTotal("cashflow");
+  const income = parseFloat(state.income) || 0;
+  const balance = income - expense;
+  $("#totCash").textContent = fmt(expense);
+  $("#sExpense").textContent = fmt(expense);
+  $("#sBalance").textContent = fmt(balance);
+  $("#sBalance").style.color = balance >= 0 ? "var(--income)" : "var(--debt)";
 }
 
 function esc(s){ return String(s).replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
@@ -502,6 +628,7 @@ function fmtDate(s) {
 function buildSummaryText() {
   const a = sideTotal("asset"), d = sideTotal("debt"), net = a - d;
   const ratio = a > 0 ? (d/a*100).toFixed(1)+"%" : "—";
+  const expense = sideTotal("cashflow"), income = parseFloat(state.income)||0, balance = income - expense;
   let t = `個人資產負債表（紀錄日期：${fmtDate($("#recordDate").value)}）\n`;
   t += `淨資產：${fmt(net)}　負債比率：${ratio}\n總資產：${fmt(a)}　總負債：${fmt(d)}\n\n【資產】\n`;
   state.asset.forEach(g => {
@@ -516,15 +643,27 @@ function buildSummaryText() {
     t += `■ ${g.name}（${fmt(groupTotal(g))}）\n`;
     g.items.forEach(it => t += `   - ${it.name}：${fmt(parseFloat(it.amt)||0)}\n`);
   });
+  t += `\n【現金流】\n本月收入總計：${fmt(income)}　本月支出總計：${fmt(expense)}　結餘：${fmt(balance)}\n`;
+  state.cashflow.forEach(g => {
+    t += `■ ${g.name}（${fmt(groupTotal(g))}）\n`;
+    g.items.forEach(it => {
+      t += `   - ${it.name}：${fmt(parseFloat(it.amt)||0)}`;
+      t += it.note ? `（備註：${it.note}）\n` : `\n`;
+    });
+  });
   return t;
 }
 
 $("#todayBtn").onclick = () => { $("#recordDate").value = todayStr(); };
 
+$("#incomeInput").oninput = e => { state.income = e.target.value; updateSummary(); save(); };
+
 document.querySelectorAll(".add-group").forEach(b => {
   b.onclick = () => {
     const side = b.dataset.side;
-    state[side].push({ name: side==="asset"?"新資產類別":"新負債類別", items: [{ name:"新項目", amt:0 }] });
+    const nameMap = { asset: "新資產類別", debt: "新負債類別", cashflow: "新現金流類別" };
+    const newItem = side === "cashflow" ? { name:"新項目", amt:0, note:"" } : { name:"新項目", amt:0 };
+    state[side].push({ name: nameMap[side] || "新類別", items: [newItem] });
     render(); save();
   };
 });
@@ -543,15 +682,22 @@ $("#importBtn").onclick = () => $("#fileInput").click();
 $("#fileInput").onchange = e => {
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = () => { try { state = JSON.parse(r.result); render(); save(true); } catch { flash("檔案格式錯誤", true); } };
+  r.onload = () => {
+    try {
+      state = JSON.parse(r.result);
+      if (!state.cashflow) state.cashflow = structuredClone(DEFAULT.cashflow);
+      if (typeof state.income !== "number") state.income = 0;
+      $("#incomeInput").value = state.income || "";
+      render(); save(true);
+    } catch { flash("檔案格式錯誤", true); }
+  };
   r.readAsText(f); e.target.value = "";
-};
-$("#reportLinkBtn").onclick = () => {
-  window.open("https://international9901149-hash.github.io/balance_report/", "_blank");
 };
 $("#resetBtn").onclick = () => {
   if(confirm("回復為預設範本？目前所有資料將被清除。")) {
-    state = structuredClone(DEFAULT); render(); save(true);
+    state = structuredClone(DEFAULT);
+    $("#incomeInput").value = "";
+    render(); save(true);
   }
 };
 
@@ -585,6 +731,7 @@ async function initFirebase() {
         ready = true;
         $("#cloudSave").disabled = false;
         $("#cloudLoad").disabled = false;
+        $("#reportBtn").disabled = false;
         setCloud("on", "已連線到 Firestore。可儲存快照或載入歷史紀錄。");
       }
     });
@@ -600,12 +747,14 @@ $("#cloudSave").onclick = async () => {
   cstat.textContent = "儲存中…"; cstat.style.color = "var(--ink-soft)";
   try {
     const a = sideTotal("asset"), d = sideTotal("debt");
+    const expense = sideTotal("cashflow"), income = parseFloat(state.income)||0;
     await FB.addDoc(colRef(), {
       owner: OWNER_ID,
       recordDate: $("#recordDate").value || todayStr(),
       data: state,
       totalAsset: a, totalDebt: d, netWorth: a - d,
       ratio: a > 0 ? d/a : 0,
+      monthlyExpense: expense, monthlyIncome: income, cashBalance: income - expense,
       savedAt: new Date().toISOString(),
       createdAt: FB.serverTimestamp()
     });
@@ -615,6 +764,11 @@ $("#cloudSave").onclick = async () => {
 };
 
 $("#cloudLoad").onclick = () => loadHistory();
+
+$("#reportBtn").onclick = () => {
+  // 報表頁需與本檔放在同一資料夾，檔名為 balance-report.html
+  window.open("balance-report.html", "_blank");
+};
 
 async function loadHistory() {
   if (!ready) return;
@@ -643,7 +797,10 @@ async function loadHistory() {
       div.querySelector('[data-act="load"]').onclick = () => {
         if (confirm(`載入「${dateLabel}」這筆紀錄？目前畫面上的資料將被覆蓋（仍可再次儲存）。`)) {
           state = structuredClone(r.data);
+          if (!state.cashflow) state.cashflow = structuredClone(DEFAULT.cashflow);
+          if (typeof state.income !== "number") state.income = 0;
           if (r.recordDate) $("#recordDate").value = r.recordDate;
+          $("#incomeInput").value = state.income || "";
           render(); save(true);
           flash("已載入，可直接修改後再儲存", false, cstat);
           window.scrollTo({ top: 0, behavior: "smooth" });
