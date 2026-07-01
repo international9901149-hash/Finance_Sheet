@@ -244,6 +244,16 @@
   .cloud .dot.on { background: var(--asset); }
   .cloud .dot.err { background: var(--debt); }
   .cloud .desc { font-size: 0.74rem; color: var(--ink-soft); margin-bottom: 14px; }
+  .edit-banner {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 0.78rem; color: var(--cash); background: var(--cash-bg);
+    border-radius: 9px; padding: 9px 13px; margin-bottom: 14px;
+  }
+  .edit-banner button {
+    border: 1px solid var(--cash); background: #fff; color: var(--cash);
+    border-radius: 7px; padding: 4px 10px; font-size: 0.72rem; cursor: pointer; font-weight: 600;
+  }
+  .edit-banner button:hover { background: var(--cash); color: #fff; }
   .cloud-actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .history { margin-top: 16px; }
   .history-item {
@@ -366,6 +376,7 @@
   <div class="cloud">
     <h3><span class="dot" id="cloudDot"></span>雲端紀錄（Firebase Firestore）</h3>
     <div class="desc" id="cloudDesc">尚未連線。請於程式碼上方填入你的 firebaseConfig 即可啟用。</div>
+    <div class="edit-banner" id="editBanner" style="display:none;"></div>
     <div class="cloud-actions">
       <button class="btn primary" id="cloudSave" disabled>儲存到雲端</button>
       <button class="btn" id="cloudLoad" disabled>載入歷史紀錄</button>
@@ -697,17 +708,33 @@ $("#resetBtn").onclick = () => {
   if(confirm("回復為預設範本？目前所有資料將被清除。")) {
     state = structuredClone(DEFAULT);
     $("#incomeInput").value = "";
-    render(); save(true);
+    editingId = null;
+    render(); save(true); updateEditBanner();
   }
 };
 
 /* ===================== Firebase Firestore ===================== */
-let db = null, ready = false, FB = null;
+let db = null, ready = false, FB = null, editingId = null;
 const dot = $("#cloudDot"), cdesc = $("#cloudDesc"), cstat = $("#cloudStatus");
 
 function setCloud(state_, msg) {
   dot.className = "dot" + (state_==="on"?" on":state_==="err"?" err":"");
   if (msg) cdesc.textContent = msg;
+}
+
+function updateEditBanner() {
+  const el = $("#editBanner");
+  if (editingId) {
+    el.style.display = "flex";
+    el.innerHTML = `✎ 正在編輯「${fmtDate($("#recordDate").value)}」的雲端紀錄，按「儲存到雲端」會直接覆蓋更新這筆資料。<button id="cancelEditBtn" type="button">改為新增新紀錄</button>`;
+    $("#cancelEditBtn").onclick = () => {
+      editingId = null; updateEditBanner();
+      flash("已切換為新增模式，下次儲存會建立新紀錄", false, cstat);
+    };
+  } else {
+    el.style.display = "none";
+    el.innerHTML = "";
+  }
 }
 
 async function initFirebase() {
@@ -733,6 +760,7 @@ async function initFirebase() {
         $("#cloudLoad").disabled = false;
         $("#reportBtn").disabled = false;
         setCloud("on", "已連線到 Firestore。可儲存快照或載入歷史紀錄。");
+        loadFromQueryParam();
       }
     });
   } catch (e) {
@@ -742,13 +770,39 @@ async function initFirebase() {
 
 const colRef = () => FB.collection(db, "balanceSheets");
 
+async function loadFromQueryParam() {
+  const params = new URLSearchParams(location.search);
+  const id = params.get("loadId");
+  if (!id) return;
+  try {
+    const snap = await FB.getDoc(FB.doc(db, "balanceSheets", id));
+    if (snap.exists()) {
+      const r = snap.data();
+      state = structuredClone(r.data);
+      if (!state.cashflow) state.cashflow = structuredClone(DEFAULT.cashflow);
+      if (typeof state.income !== "number") state.income = 0;
+      if (r.recordDate) $("#recordDate").value = r.recordDate;
+      $("#incomeInput").value = state.income || "";
+      editingId = id;
+      render(); save(true); updateEditBanner();
+      flash("已從報表載入這筆紀錄，可直接修改後再儲存", false, cstat);
+    } else {
+      flash("找不到這筆紀錄", true, cstat);
+    }
+  } catch (e) {
+    flash("載入失敗：" + (e.code || e.message), true, cstat);
+  }
+  // 清除網址上的 loadId，避免重新整理時重複載入
+  history.replaceState(null, "", location.pathname);
+}
+
 $("#cloudSave").onclick = async () => {
   if (!ready) return;
   cstat.textContent = "儲存中…"; cstat.style.color = "var(--ink-soft)";
   try {
     const a = sideTotal("asset"), d = sideTotal("debt");
     const expense = sideTotal("cashflow"), income = parseFloat(state.income)||0;
-    await FB.addDoc(colRef(), {
+    const payload = {
       owner: OWNER_ID,
       recordDate: $("#recordDate").value || todayStr(),
       data: state,
@@ -756,9 +810,17 @@ $("#cloudSave").onclick = async () => {
       ratio: a > 0 ? d/a : 0,
       monthlyExpense: expense, monthlyIncome: income, cashBalance: income - expense,
       savedAt: new Date().toISOString(),
-      createdAt: FB.serverTimestamp()
-    });
-    flash("已儲存到雲端", false, cstat);
+    };
+    if (editingId) {
+      await FB.updateDoc(FB.doc(db, "balanceSheets", editingId), payload);
+      flash("已更新這筆雲端紀錄", false, cstat);
+    } else {
+      payload.createdAt = FB.serverTimestamp();
+      const ref = await FB.addDoc(colRef(), payload);
+      editingId = ref.id;
+      updateEditBanner();
+      flash("已儲存到雲端", false, cstat);
+    }
     loadHistory();
   } catch (e) { flash("儲存失敗：" + e.code, true, cstat); }
 };
@@ -766,8 +828,7 @@ $("#cloudSave").onclick = async () => {
 $("#cloudLoad").onclick = () => loadHistory();
 
 $("#reportBtn").onclick = () => {
-  // 報表頁需與本檔放在同一資料夾，檔名為 balance-report.html
-  window.open("balance-report.html", "_blank");
+  window.open("https://international9901149-hash.github.io/balance_report/", "_blank");
 };
 
 async function loadHistory() {
@@ -801,14 +862,19 @@ async function loadHistory() {
           if (typeof state.income !== "number") state.income = 0;
           if (r.recordDate) $("#recordDate").value = r.recordDate;
           $("#incomeInput").value = state.income || "";
-          render(); save(true);
+          editingId = r.id;
+          render(); save(true); updateEditBanner();
           flash("已載入，可直接修改後再儲存", false, cstat);
           window.scrollTo({ top: 0, behavior: "smooth" });
         }
       };
       div.querySelector('[data-act="del"]').onclick = async () => {
         if (confirm(`確定刪除「${dateLabel}」這筆雲端紀錄？`)) {
-          try { await FB.deleteDoc(FB.doc(db, "balanceSheets", r.id)); flash("已刪除", false, cstat); loadHistory(); }
+          try {
+            await FB.deleteDoc(FB.doc(db, "balanceSheets", r.id));
+            if (editingId === r.id) { editingId = null; updateEditBanner(); }
+            flash("已刪除", false, cstat); loadHistory();
+          }
           catch (e) { flash("刪除失敗：" + e.code, true, cstat); }
         }
       };
