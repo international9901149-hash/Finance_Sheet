@@ -906,7 +906,9 @@ async function loadHistory() {
     const q = FB.query(colRef(), FB.orderBy("recordDate", "desc"), FB.limit(60));
     const snap = await FB.getDocs(q);
     const rows = [];
-    snap.forEach(d => { if ((d.data().owner||"") === OWNER_ID) rows.push({ id: d.id, ...d.data() }); });
+    // 安全性已由 Firestore 規則（比對登入 email）把關，這裡不再需要比對 owner 欄位，
+    // 避免舊資料因 owner 欄位值不同（例如舊版寫死的 "jim"）而被誤濾掉。
+    snap.forEach(d => rows.push({ id: d.id, ...d.data() }));
     if (!rows.length) { list.innerHTML = `<div class="history-empty">尚無雲端紀錄。</div>`; return; }
     list.innerHTML = "";
     rows.forEach(r => {
