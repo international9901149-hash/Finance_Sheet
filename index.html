@@ -26,6 +26,31 @@
     --accent: #1a3a6b;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  #authGate {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 16px; z-index: 999; padding: 24px; text-align: center;
+  }
+  #authGate.hidden { display: none; }
+  #authGate h2 { font-size: 1.2rem; color: var(--ink); }
+  #authGate p { color: var(--ink-soft); font-size: 0.9rem; max-width: 320px; }
+  #googleLoginBtn {
+    display: flex; align-items: center; gap: 10px; padding: 10px 20px;
+    background: #fff; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 0.95rem; cursor: pointer; color: var(--ink);
+  }
+  #googleLoginBtn:hover { background: #f5f6f8; }
+  #authError { color: var(--debt); font-size: 0.85rem; min-height: 1.2em; }
+  .wrap.hidden { display: none; }
+  .userbar {
+    display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+    font-size: 0.8rem; color: var(--ink-soft); margin-bottom: 8px;
+  }
+  .userbar button {
+    border: 1px solid var(--line); background: #fff; border-radius: 8px;
+    padding: 4px 10px; font-size: 0.78rem; cursor: pointer; color: var(--ink-soft);
+  }
+  .userbar button:hover { background: #f5f6f8; }
   body {
     font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
     background: var(--bg);
@@ -281,7 +306,19 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+
+<div id="authGate">
+  <h2>個人資產負債表</h2>
+  <p>此網站僅限擁有者本人使用，請使用您的 Google 帳號登入以繼續。</p>
+  <button id="googleLoginBtn">使用 Google 帳號登入</button>
+  <div id="authError"></div>
+</div>
+
+<div class="wrap hidden" id="mainWrap">
+  <div class="userbar" id="userBar" style="display:none">
+    <span id="userEmail"></span>
+    <button id="logoutBtn">登出</button>
+  </div>
   <header>
     <h1>個人資產負債表 <small>Personal Balance Sheet</small></h1>
     <div class="updated" id="updated"></div>
@@ -402,8 +439,8 @@ const firebaseConfig = {
   appId: "1:600994047066:web:e7c041ea86d825d26fa463"
 };
 
-// 同一份資料的擁有者識別（可自訂，用來區隔不同人的紀錄）
-const OWNER_ID = "jim";
+// 資料擁有者識別：改為登入後由 Google 帳號取得的 UID，登入前為 null
+let OWNER_ID = null;
 /* ====================================================================== */
 
 const fmt = n => "NT$ " + Math.round(n).toLocaleString("en-US");
@@ -737,6 +774,10 @@ function updateEditBanner() {
   }
 }
 
+const authGate = $("#authGate"), mainWrap = $("#mainWrap"), authErr = $("#authError");
+const userBar = $("#userBar"), userEmail = $("#userEmail");
+let authModRef = null, authRef = null;
+
 async function initFirebase() {
   if (!firebaseConfig.projectId || !firebaseConfig.apiKey) {
     setCloud("", "尚未連線。請於程式碼上方填入你的 firebaseConfig 即可啟用雲端功能。");
@@ -749,22 +790,48 @@ async function initFirebase() {
       import("https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js"),
     ]);
     FB = fsMod;
+    authModRef = authMod;
     const app = appMod.initializeApp(firebaseConfig);
     db = fsMod.getFirestore(app);
-    const auth = authMod.getAuth(app);
-    await authMod.signInAnonymously(auth);
-    authMod.onAuthStateChanged(auth, u => {
+    authRef = authMod.getAuth(app);
+
+    authMod.onAuthStateChanged(authRef, u => {
       if (u) {
+        OWNER_ID = u.uid;
         ready = true;
+        authGate.classList.add("hidden");
+        mainWrap.classList.remove("hidden");
+        userBar.style.display = "flex";
+        userEmail.textContent = u.email || u.uid;
         $("#cloudSave").disabled = false;
         $("#cloudLoad").disabled = false;
         $("#reportBtn").disabled = false;
         setCloud("on", "已連線到 Firestore。可儲存快照或載入歷史紀錄。");
         loadFromQueryParam();
+      } else {
+        OWNER_ID = null;
+        ready = false;
+        authGate.classList.remove("hidden");
+        mainWrap.classList.add("hidden");
+        userBar.style.display = "none";
       }
     });
+
+    $("#googleLoginBtn").onclick = async () => {
+      authErr.textContent = "";
+      try {
+        const provider = new authMod.GoogleAuthProvider();
+        await authMod.signInWithPopup(authRef, provider);
+      } catch (e) {
+        authErr.textContent = "登入失敗：" + (e.code || e.message);
+      }
+    };
+
+    $("#logoutBtn").onclick = () => authModRef.signOut(authRef);
+
   } catch (e) {
     setCloud("err", "雲端連線失敗（不影響表格使用）：" + e.message);
+    authErr.textContent = "初始化失敗：" + e.message;
   }
 }
 
